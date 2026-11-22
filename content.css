@@ -1,9 +1,3 @@
-.e2p-wrap {
-  display: inline-flex !important;
-  align-items: center;
-  height: 100%;
-}
-
 .e2p-btn {
   position: relative !important;
   display: inline-flex !important;

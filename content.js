@@ -376,13 +376,29 @@
     return wrap;
   }
 
+  function hasOpenEmail() {
+    return Array.prototype.some.call(
+      document.querySelectorAll(".a3s"),
+      (el) => el.offsetParent !== null && el.offsetHeight > 4
+    );
+  }
+
+  function removeButtons() {
+    document.querySelectorAll(".e2p-wrap").forEach((n) => n.remove());
+  }
+
   function inject() {
+    // only show the button while an email is open, never in the inbox list or search results
+    if (!hasOpenEmail()) {
+      removeButtons();
+      return;
+    }
     const toolbars = document.querySelectorAll('div[gh="mtb"]');
     toolbars.forEach((tb) => {
-      if (!tb.offsetParent && tb.offsetHeight === 0) return;
+      if (!tb.offsetParent || tb.offsetHeight === 0) return;
       if (tb.querySelector("#" + BTN_ID)) return;
-      // only in conversation view — the list toolbar has a select-all checkbox
-      if (tb.querySelector('div[role="checkbox"], .T-Jo-auh')) return;
+      // skip list toolbars, which have a select-all checkbox
+      if (tb.querySelector('div[role="checkbox"], span[role="checkbox"], .T-Jo-auh')) return;
       tb.appendChild(makeButton());
     });
   }
