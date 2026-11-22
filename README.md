@@ -28,8 +28,18 @@ Open an email, then:
 
 Files are named `brand_subject_date.jpg`, so a swipe folder sorts itself.
 
+## Export a whole list
+
+Search for something (like a brand name) or open a label, then click **Export all** next to the refresh button. The extension opens each email in turn, saves it as a JPG and moves through every page of results. When it's done you get one folder in Downloads with all the images and an `emails.csv` listing brand, sender, subject and date for each file.
+
+Only want some of them? Tick the emails first. The button changes to **Export selected (n)** and saves just those.
+
+- Leave the tab open while it runs. Click **Stop** in the panel to end early. Everything saved so far stays.
+- Opening each email marks it as read.
+- If Chrome asks where to save every file, turn off "Ask where to save each file" in Chrome's download settings first.
+
 ## If something's off
 
-- **"Message clipped"**: Gmail cuts off long emails. Click "View entire message" first, then export.
+- **"Message clipped"**: Gmail cuts off long emails. Click "View entire message" first, then export. In a batch export, clipped emails are saved as they are and marked in the CSV.
 - **Fonts look different**: some web fonts don't render. Most emails use standard fonts, so this is rare.
 - **Button disappeared**: Gmail changes its layout now and then. Grab the latest version from unslop.email.

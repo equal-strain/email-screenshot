@@ -95,3 +95,77 @@
 .e2p-btn::after {
   display: none !important;
 }
+
+
+/* Export all (list toolbar) */
+.e2p-export-wrap {
+  position: relative !important;
+  z-index: 10 !important; /* Gmail's toolbar has an overlay that otherwise eats the click */
+  display: inline-flex !important;
+  align-items: center !important;
+  margin-left: 8px !important;
+}
+.e2p-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 14px 0 11px;
+  border-radius: 999px;
+  background: #FF5A1F;
+  color: #ffffff;
+  font: 500 13px/1 "Google Sans", Roboto, Arial, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background-color 140ms ease;
+}
+.e2p-export:hover { background: #F04D12; }
+.e2p-export svg.e2p-logo {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 22;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+/* Batch progress panel */
+#e2p-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2147483647;
+  width: 320px;
+  box-sizing: border-box;
+  padding: 16px 18px 14px;
+  border-radius: 14px;
+  background: #111111;
+  color: #ffffff;
+  font: 13px/1.45 "Google Sans", Roboto, Arial, sans-serif;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+#e2p-panel .e2p-p-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+#e2p-panel .e2p-p-line { color: #FF8A5C; }
+#e2p-panel .e2p-p-sub {
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#e2p-panel .e2p-p-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+#e2p-panel .e2p-p-stop {
+  all: unset;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+#e2p-panel .e2p-p-stop:hover { background: rgba(255, 255, 255, 0.2); }

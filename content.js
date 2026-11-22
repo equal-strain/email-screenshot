@@ -86,12 +86,22 @@
       ? (dateEl.getAttribute("title") || dateEl.innerText || "").trim()
       : "";
 
+    // Gmail titles come as "Nov 21, 2026, 5:13 PM" or "Fri, Nov 21, 2026, 5:13 PM"
+    const localDay = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     let iso = "";
-    const parsed = dateText ? new Date(dateText.replace(/^[^,]*,\s*/, "")) : null;
-    if (parsed && !isNaN(parsed)) iso = parsed.toISOString().slice(0, 10);
-    if (!iso) iso = new Date().toISOString().slice(0, 10);
+    if (dateText) {
+      const clean = dateText.replace(/\s*\(.*\)\s*$/, "").replace(/\u202f/g, " ");
+      let d = new Date(clean);
+      if (isNaN(d) || d.getFullYear() < 2000) d = new Date(clean.replace(/^[A-Za-z]{3,9},\s*/, ""));
+      if (!isNaN(d) && d.getFullYear() >= 2000) iso = localDay(d);
+    }
+    if (!iso) iso = localDay(new Date());
 
-    const brand = address.split("@")[1] ? address.split("@")[1].split(".")[0] : slug(sender);
+    // brand from the sender's domain, skipping mail./email./news. style subdomains
+    const host = (address.split("@")[1] || "").toLowerCase().split(".");
+    const skip = ["mail", "email", "e", "em", "news", "hello", "info", "send", "mailer", "marketing", "updates"];
+    while (host.length > 2 && skip.includes(host[0])) host.shift();
+    const brand = host.length >= 2 ? host[0] : slug(sender);
 
     return { body, card, subject, sender, address, dateText, iso, brand };
   }
@@ -378,6 +388,269 @@
     }
   }
 
+
+  /* ------------------------------------------------------------- batch */
+
+  const EXPORT_ID = "e2p-export";
+  let stopBatch = false;
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function waitFor(fn, timeout = 15000, step = 150) {
+    const end = Date.now() + timeout;
+    while (Date.now() < end) {
+      if (stopBatch) return null;
+      const v = fn();
+      if (v) return v;
+      await sleep(step);
+    }
+    return null;
+  }
+
+  function listBase() {
+    const parts = location.hash.replace(/^#/, "").split("?")[0].split("/");
+    if (parts.length > 1 && /^p\d+$/.test(parts[parts.length - 1])) parts.pop();
+    return "#" + parts.join("/");
+  }
+
+  function pageNumber() {
+    const m = location.hash.match(/\/p(\d+)$/);
+    return m ? parseInt(m[1], 10) : 1;
+  }
+
+  function visibleRows() {
+    return Array.prototype.filter.call(
+      document.querySelectorAll("tr.zA"),
+      (r) => r.offsetParent !== null && r.getBoundingClientRect().height > 0
+    );
+  }
+
+  function rowId(row) {
+    const legacy = row.querySelector("[data-legacy-thread-id]");
+    if (legacy) return legacy.getAttribute("data-legacy-thread-id");
+    const t = row.querySelector("[data-thread-id]");
+    const m = t && (t.getAttribute("data-thread-id") || "").match(/thread-f:(\d+)/);
+    if (m && typeof BigInt === "function") return BigInt(m[1]).toString(16);
+    return null;
+  }
+
+  function isChecked(row) {
+    return row.classList.contains("x7") || !!row.querySelector('[role="checkbox"][aria-checked="true"]');
+  }
+
+  function selectedIds() {
+    return visibleRows().filter(isChecked).map(rowId).filter(Boolean);
+  }
+
+  function updateExportLabel() {
+    const btn = document.getElementById(EXPORT_ID);
+    if (!btn) return;
+    const n = selectedIds().length;
+    const label = n ? "Export selected (" + n + ")" : "Export all";
+    const span = btn.querySelector("span");
+    if (span && span.textContent !== label) span.textContent = label;
+    btn.setAttribute("data-tooltip", n ? "Save the checked emails as images" : "Save every email in this list as an image");
+  }
+
+  function visibleBodies() {
+    return Array.prototype.filter.call(document.querySelectorAll(".a3s"), (el) => {
+      const r = el.getBoundingClientRect();
+      return el.offsetParent !== null && r.width > 0 && r.height > 4;
+    });
+  }
+
+  function csvCell(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function panel() {
+    let el = document.getElementById("e2p-panel");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "e2p-panel";
+      el.innerHTML =
+        '<div class="e2p-p-title"></div><div class="e2p-p-line"></div><div class="e2p-p-sub"></div>' +
+        '<div class="e2p-p-actions"><button type="button" class="e2p-p-stop">Stop</button></div>';
+      el.querySelector(".e2p-p-stop").addEventListener("click", () => {
+        if (el.dataset.done === "1") el.remove();
+        else {
+          stopBatch = true;
+          el.querySelector(".e2p-p-stop").textContent = "Stopping…";
+        }
+      });
+      document.body.appendChild(el);
+    }
+    return {
+      el,
+      set(title, line, sub) {
+        el.querySelector(".e2p-p-title").textContent = title;
+        el.querySelector(".e2p-p-line").textContent = line;
+        el.querySelector(".e2p-p-sub").textContent = sub || "";
+      },
+      done() {
+        el.dataset.done = "1";
+        el.querySelector(".e2p-p-stop").textContent = "Close";
+      },
+    };
+  }
+
+  async function runBatch() {
+    if (busy) return;
+    busy = true;
+    stopBatch = false;
+
+    const base = listBase();
+    const query = decodeURIComponent(base.replace(/^#/, "").split("/").slice(1).join(" ") || base.replace(/^#/, "")).replace(/\+/g, " ");
+    const now = new Date();
+    const stamp = now.toISOString().slice(0, 10) + "-" + String(now.getHours()).padStart(2, "0") + String(now.getMinutes()).padStart(2, "0");
+    const folder = "Unslop export/" + (slug(query, 40) || "gmail") + "-" + stamp;
+    const ui = panel();
+    delete ui.el.dataset.done;
+    ui.el.querySelector(".e2p-p-stop").textContent = "Stop";
+
+    const seen = new Set();
+    const rows = [];
+    let saved = 0;
+    let failed = 0;
+    let clipped = 0;
+    let page = pageNumber();
+    const picked = selectedIds(); // checked emails only, if any are checked
+    const onlyPicked = picked.length > 0;
+    let firstRound = true;
+
+    try {
+      while (!stopBatch) {
+        const ids = onlyPicked
+          ? firstRound
+            ? picked
+            : []
+          : visibleRows().map(rowId).filter((id) => id && !seen.has(id));
+        firstRound = false;
+        if (!ids.length) break;
+
+        for (const id of ids) {
+          if (stopBatch) break;
+          seen.add(id);
+          ui.set("Exporting “" + query + "”", onlyPicked ? saved + " of " + picked.length + " saved" : saved + " saved · page " + page, "Opening email " + seen.size + "…");
+
+          const before = new Set(visibleBodies());
+          const subjEl = document.querySelector("h2.hP");
+          const beforeSubject = subjEl ? subjEl.innerText : "";
+          location.hash = base + "/" + id;
+
+          const opened = await waitFor(() => {
+            if (!threadInUrl()) return null;
+            const bodies = visibleBodies();
+            if (!bodies.length) return null;
+            const s = document.querySelector("h2.hP");
+            const fresh = bodies.some((b) => !before.has(b)) || (s && s.innerText !== beforeSubject);
+            return fresh ? bodies : null;
+          });
+          if (!opened) {
+            failed++;
+            rows.push({ file: "", brand: "", email: "", subject: "", date: "", clipped: "", link: location.origin + location.pathname + "#all/" + id, note: "Did not open" });
+            continue;
+          }
+          await sleep(700);
+
+          const info = getOpenMessage();
+          if (!info) {
+            failed++;
+            continue;
+          }
+          const isCut = isClipped(info.card);
+          if (isCut) clipped++;
+          ui.set("Exporting “" + query + "”", onlyPicked ? saved + " of " + picked.length + " saved" : saved + " saved · page " + page, info.subject);
+
+          try {
+            const canvas = trim(await renderToCanvas(info, false));
+            const blob = await canvasToBlob(canvas, "image/jpeg");
+            if (!blob) throw new Error("encode");
+            const file = [String(seen.size).padStart(3, "0"), slug(info.brand, 24), info.iso, slug(info.subject, 60)].filter(Boolean).join("_") + ".jpg";
+            await download(blob, folder + "/" + file);
+            saved++;
+            rows.push({
+              file,
+              brand: info.sender,
+              email: info.address,
+              subject: info.subject,
+              date: info.iso,
+              clipped: isCut ? "yes" : "",
+              link: location.origin + location.pathname + "#all/" + id,
+              note: "",
+            });
+          } catch (e) {
+            failed++;
+            rows.push({ file: "", brand: info.sender, email: info.address, subject: info.subject, date: info.iso, clipped: "", link: location.origin + location.pathname + "#all/" + id, note: "Render failed" });
+          }
+          await sleep(250);
+        }
+        if (stopBatch || onlyPicked) break;
+
+        // next page of results
+        page++;
+        ui.set("Exporting “" + query + "”", saved + " saved · page " + page, "Loading the next page…");
+        location.hash = base + "/p" + page;
+        const more = await waitFor(() => {
+          if (threadInUrl()) return null;
+          const ids = visibleRows().map(rowId).filter(Boolean);
+          return ids.length && ids.some((x) => !seen.has(x)) ? ids : null;
+        }, 12000);
+        if (!more) break;
+      }
+    } finally {
+      if (rows.length) {
+        const head = ["file", "brand", "sender_email", "subject", "date", "clipped", "gmail_link", "note"];
+        const csv = [head.join(",")]
+          .concat(rows.map((r) => [r.file, r.brand, r.email, r.subject, r.date, r.clipped, r.link, r.note].map(csvCell).join(",")))
+          .join("\n");
+        await download(new Blob(["﻿" + csv], { type: "text/csv" }), folder + "/emails.csv");
+      }
+      location.hash = base;
+      busy = false;
+      const extra = [failed ? failed + " failed" : "", clipped ? clipped + " clipped by Gmail" : ""].filter(Boolean).join(" · ");
+      ui.set(stopBatch ? "Export stopped" : "Export finished", saved + " saved to Downloads/" + folder, extra);
+      ui.done();
+    }
+  }
+
+  function makeExportButton() {
+    const wrap = document.createElement("div");
+    wrap.className = "G-Ni e2p-export-wrap";
+    const btn = document.createElement("div");
+    btn.id = EXPORT_ID;
+    btn.className = "e2p-export";
+    btn.setAttribute("role", "button");
+    btn.setAttribute("tabindex", "0");
+    btn.setAttribute("data-tooltip", "Save every email in this list as an image");
+    btn.innerHTML = ICON + "<span>Export all</span>";
+    btn.addEventListener("click", runBatch);
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") runBatch();
+    });
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  function injectExport() {
+    const listToolbars = Array.prototype.filter.call(document.querySelectorAll('div[gh="mtb"]'), (tb) => {
+      if (!tb.offsetParent || tb.offsetHeight === 0) return false;
+      return !!tb.querySelector('div[role="checkbox"], span[role="checkbox"], .T-Jo-auh');
+    });
+    document.querySelectorAll(".e2p-export-wrap").forEach((n) => {
+      if (!listToolbars.some((tb) => tb.contains(n))) n.remove();
+    });
+    listToolbars.forEach((tb) => {
+      if (tb.querySelector("#" + EXPORT_ID)) return updateExportLabel();
+      // sit next to the refresh and "more" icons, not after the pagination
+      const refresh = tb.querySelector('div[act="20"], div[data-tooltip="Refresh"], div[aria-label="Refresh"]');
+      const group = refresh && refresh.closest(".G-Ni") ? refresh.closest(".G-Ni").parentElement : null;
+      (group || tb).appendChild(makeExportButton());
+      updateExportLabel();
+    });
+  }
+
   /* ------------------------------------------------------------ injection */
 
   function makeButton() {
@@ -427,8 +700,10 @@
     // only show the button while an email is open, never in the inbox list or search results
     if (!hasOpenEmail()) {
       removeButtons();
+      if (!threadInUrl() && !busy) injectExport();
       return;
     }
+    document.querySelectorAll(".e2p-export-wrap").forEach((n) => n.remove());
     const toolbars = document.querySelectorAll('div[gh="mtb"]');
     toolbars.forEach((tb) => {
       if (!tb.offsetParent || tb.offsetHeight === 0) return;
@@ -447,6 +722,10 @@
     });
     obs.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("hashchange", () => setTimeout(inject, 300));
+    // checking a box only flips an attribute, so watch clicks and keys for the label
+    const relabel = () => setTimeout(updateExportLabel, 60);
+    document.addEventListener("click", relabel, true);
+    document.addEventListener("keyup", relabel, true);
   }
 
   if (document.readyState === "loading") {
