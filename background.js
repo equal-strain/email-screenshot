@@ -41,4 +41,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     grab(msg.url).then(sendResponse);
     return true; // keep the channel open for the async response
   }
+
+  // Save through Chrome's own downloads, so Gmail's page can't swallow the click
+  if (msg && msg.type === "download" && typeof msg.dataUrl === "string") {
+    chrome.downloads.download(
+      { url: msg.dataUrl, filename: msg.filename || "email.jpg", saveAs: false, conflictAction: "uniquify" },
+      (id) => {
+        if (chrome.runtime.lastError || !id) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError ? chrome.runtime.lastError.message : "failed" });
+        } else {
+          sendResponse({ ok: true });
+        }
+      }
+    );
+    return true;
+  }
 });

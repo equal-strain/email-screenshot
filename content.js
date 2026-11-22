@@ -287,18 +287,44 @@
     );
   }
 
-  function download(blob, filename) {
+  function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  }
+
+  function anchorDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
+    document.documentElement.appendChild(a);
+    a.dispatchEvent(new MouseEvent("click", { bubbles: false }));
     setTimeout(() => {
       a.remove();
       URL.revokeObjectURL(url);
     }, 4000);
+  }
+
+  async function download(blob, filename) {
+    try {
+      const dataUrl = await blobToDataURL(blob);
+      const res = await new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ type: "download", dataUrl, filename }, (r) => {
+            resolve(chrome.runtime.lastError ? { ok: false } : r || { ok: false });
+          });
+        } catch (e) {
+          resolve({ ok: false });
+        }
+      });
+      if (res.ok) return;
+    } catch (e) {}
+    anchorDownload(blob, filename);
   }
 
   async function copyToClipboard(blob) {
@@ -340,7 +366,7 @@
         const name = [slug(info.brand, 24), slug(info.subject, 70), info.iso]
           .filter(Boolean)
           .join("_");
-        download(blob, `${name || "email"}.jpg`);
+        await download(blob, `${name || "email"}.jpg`);
         toast(`Saved · ${canvas.width}×${canvas.height}`);
       }
     } catch (e) {

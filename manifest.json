@@ -1,9 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Email Screenshot",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Save any Gmail email as a full-length image in one click. Free from Unslop.email.",
   "homepage_url": "https://unslop.email",
+  "permissions": [
+    "downloads"
+  ],
   "host_permissions": [
     "https://mail.google.com/*",
     "<all_urls>"
