@@ -238,18 +238,22 @@
     };
     const bg = at(0, 0);
     const near = (p) =>
-      Math.abs(p[0] - bg[0]) < 6 && Math.abs(p[1] - bg[1]) < 6 && Math.abs(p[2] - bg[2]) < 6;
+      Math.abs(p[0] - bg[0]) < 12 && Math.abs(p[1] - bg[1]) < 12 && Math.abs(p[2] - bg[2]) < 12;
 
     const stepY = Math.max(1, Math.floor(h / 1400));
     const stepX = Math.max(1, Math.floor(w / 1400));
 
+    // A row or column counts as empty if almost every sampled pixel matches the
+    // background. This skips stray anti-aliased pixels from the email's wrapper.
     const colBlank = (x) => {
-      for (let y = 0; y < h; y += stepY) if (!near(at(x, y))) return false;
-      return true;
+      let off = 0, n = 0;
+      for (let y = 0; y < h; y += stepY, n++) if (!near(at(x, y))) off++;
+      return off <= Math.max(1, n * 0.004);
     };
     const rowBlank = (y) => {
-      for (let x = 0; x < w; x += stepX) if (!near(at(x, y))) return false;
-      return true;
+      let off = 0, n = 0;
+      for (let x = 0; x < w; x += stepX, n++) if (!near(at(x, y))) off++;
+      return off <= Math.max(1, n * 0.004);
     };
 
     let left = 0, right = w - 1, top = 0, bottom = h - 1;
@@ -258,11 +262,6 @@
     while (top < bottom && rowBlank(top)) top++;
     while (bottom > top && rowBlank(bottom)) bottom--;
 
-    const pad = Math.round(Math.min(24, w * 0.01));
-    left = Math.max(0, left - pad);
-    right = Math.min(w - 1, right + pad);
-    top = Math.max(0, top - pad);
-    bottom = Math.min(h - 1, bottom + pad);
 
     const nw = right - left + 1;
     const nh = bottom - top + 1;
