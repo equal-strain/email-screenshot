@@ -6,7 +6,9 @@ Adds a button to the Gmail toolbar (right after the ⋮) that saves the open ema
 
 ## Install
 
-1. Unzip this folder and move it somewhere permanent. Chrome loads it from that spot every time it starts, so don't leave it in Downloads.
+**[Download email-screenshot.zip](https://github.com/equal-strain/email-screenshot/raw/main/email-screenshot.zip)**
+
+1. Unzip the folder and move it somewhere permanent. Chrome loads it from that spot every time it starts, so don't leave it in Downloads.
 2. Open `chrome://extensions`
 3. Turn on **Developer mode** (top right)
 4. Click **Load unpacked** and pick the `email-screenshot` folder
