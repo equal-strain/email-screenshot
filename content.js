@@ -401,11 +401,22 @@
     return wrap;
   }
 
+  // Gmail keeps hidden copies of earlier emails around in list and search views,
+  // so the URL decides: an open thread always ends in its thread id,
+  // e.g. #inbox/FMfcgz... or #search/im8/FMfcgz..., while #search/im8 is a list.
+  function threadInUrl() {
+    const parts = location.hash.replace(/^#/, "").split("?")[0].split("/");
+    if (parts.length < 2) return false;
+    const last = parts[parts.length - 1];
+    return last.length >= 16 && /^[A-Za-z0-9]+$/.test(last);
+  }
+
   function hasOpenEmail() {
-    return Array.prototype.some.call(
-      document.querySelectorAll(".a3s"),
-      (el) => el.offsetParent !== null && el.offsetHeight > 4
-    );
+    if (!threadInUrl()) return false;
+    return Array.prototype.some.call(document.querySelectorAll(".a3s"), (el) => {
+      const r = el.getBoundingClientRect();
+      return el.offsetParent !== null && r.width > 0 && r.height > 4;
+    });
   }
 
   function removeButtons() {
